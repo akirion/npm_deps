@@ -6,7 +6,7 @@ defmodule Mix.Tasks.NpmDeps.Get do
   use Mix.Task
 
   @impl true
-  def run(_args) do
+  def run(args) do
     case Keyword.get(Mix.Project.config(), :npm_deps) do
       nil ->
         IO.puts("""
@@ -32,7 +32,8 @@ defmodule Mix.Tasks.NpmDeps.Get do
         IO.puts("No NPM dependencies found to be fetched.")
 
       deps ->
-        NpmDeps.get(deps)
+        {opts, [], []} = OptionParser.parse(args, strict: [force: :boolean])
+        NpmDeps.get(deps, opts)
     end
   end
 end
