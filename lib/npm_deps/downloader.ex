@@ -4,23 +4,37 @@ defmodule NpmDeps.Downloader do
   """
 
   @registry "https://registry.npmjs.org"
+  @package_json "package.json"
 
-  def get(namespace, version) when is_atom(namespace),
-    do: get(to_string(namespace), version)
+  def get(namespace, version, opts \\ []) when is_atom(namespace),
+    do: get(to_string(namespace), version, opts)
 
-  def get(namespace, version) do
-    name = namespace |> String.split("/") |> List.last()
-    tmp_dir = temp_dir(name)
+  def get(namespace, version, opts \\ []) do
+    force_download = Keyword.get(opts, :force, false)
 
-    with tar <- fetch_body!("#{@registry}/#{namespace}/-/#{name}-#{version}.tgz"),
-         :ok <- extract(tar, tmp_dir),
-         :ok <- copy_to_deps(tmp_dir, namespace) do
-      {:ok, {namespace, version}}
+    require_download = if force_download do
+        true
+      else
+        installed_version = get_installed_version(Path.join(package_path(namespace), @package_json))
+        version_equal?(version, installed_version)
+      end
+    
+    if require_download do
+      name = namespace |> String.split("/") |> List.last()
+      tmp_dir = temp_dir(name)
+  
+      with tar <- fetch_body!("#{@registry}/#{namespace}/-/#{name}-#{version}.tgz"),
+           :ok <- extract(tar, tmp_dir),
+           :ok <- copy_to_deps(tmp_dir, namespace) do
+        {:ok, {:download, namespace, version}}
+      end
+    else
+      {:ok, {:keep, namespace, version}}
     end
   end
 
   def copy_to_deps(tmp_dir, namespace) do
-    with package_path <- Path.expand("deps/#{namespace}"),
+    with package_path <- package_path(namespace),
          :ok <- File.mkdir_p(Path.dirname(package_path)),
          {:ok, _binary} <- File.cp_r(Path.join(tmp_dir, "package"), package_path) do
       :ok
@@ -90,5 +104,21 @@ defmodule NpmDeps.Downloader do
         ]
       ]
     ]
+  end
+
+  defp package_path(namespace), do: Path.join(Mix.Project.deps_path, "#{namespace}")
+
+  defp get_installed_version(package_file) do
+    with {:ok, file} <- File.read(package_file),
+        {:ok, %{"version" => version}} <- NpmDeps.json_library().decode(file) do
+      version
+    else
+      _ -> nil
+    end
+  end
+
+  defp version_equal?(_,nil), do: false
+  defp version_equal?(required_version, installed_version) do
+    String.equivalent?(required_version, installed_version)
   end
 end
