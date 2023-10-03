@@ -31,6 +31,7 @@ defmodule NpmDeps.MixProject do
   defp deps do
     [
       {:castore, ">= 0.0.0"},
+      {:jason, "~> 1.4", optional: true},
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
       {:mock, "~> 0.3.7", only: :test}
     ]
